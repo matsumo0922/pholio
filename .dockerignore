@@ -1,0 +1,12 @@
+.git
+.gradle
+build
+backend/build
+frontend/node_modules
+frontend/dist
+data
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+.env
+.DS_Store
