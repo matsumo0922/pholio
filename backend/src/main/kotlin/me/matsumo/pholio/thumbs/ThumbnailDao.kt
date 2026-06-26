@@ -158,13 +158,14 @@ class ThumbnailDao(
     fun markReady(
         photoId: String,
         variant: ThumbnailVariant,
+        sourceFingerprint: String,
         relativeCachePath: String,
         width: Int?,
         height: Int?,
         sizeBytes: Long,
         now: Long,
-    ) {
-        database.withConnection { connection ->
+    ): Boolean {
+        return database.withConnection { connection ->
             connection.prepareStatement(
                 """
                 UPDATE photo_thumbnails
@@ -179,6 +180,7 @@ class ThumbnailDao(
                     updated_at_epoch_ms = ?
                 WHERE photo_id = ?
                   AND variant = ?
+                  AND source_fingerprint = ?
                 """.trimIndent(),
             ).use { statement ->
                 statement.setString(1, relativeCachePath)
@@ -189,7 +191,8 @@ class ThumbnailDao(
                 statement.setLong(6, now)
                 statement.setString(7, photoId)
                 statement.setString(8, variant.dbValue)
-                statement.executeUpdate()
+                statement.setString(9, sourceFingerprint)
+                statement.executeUpdate() > 0
             }
         }
     }
@@ -197,8 +200,15 @@ class ThumbnailDao(
     /**
      * thumbnail 生成失敗を記録する。
      */
-    fun markFailed(photoId: String, variant: ThumbnailVariant, error: String, now: Long, maxAttempts: Int) {
-        database.withConnection { connection ->
+    fun markFailed(
+        photoId: String,
+        variant: ThumbnailVariant,
+        sourceFingerprint: String,
+        error: String,
+        now: Long,
+        maxAttempts: Int,
+    ): Boolean {
+        return database.withConnection { connection ->
             connection.prepareStatement(
                 """
                 UPDATE photo_thumbnails
@@ -209,6 +219,7 @@ class ThumbnailDao(
                     updated_at_epoch_ms = ?
                 WHERE photo_id = ?
                   AND variant = ?
+                  AND source_fingerprint = ?
                 """.trimIndent(),
             ).use { statement ->
                 statement.setInt(1, maxAttempts)
@@ -216,7 +227,8 @@ class ThumbnailDao(
                 statement.setLong(3, now)
                 statement.setString(4, photoId)
                 statement.setString(5, variant.dbValue)
-                statement.executeUpdate()
+                statement.setString(6, sourceFingerprint)
+                statement.executeUpdate() > 0
             }
         }
     }
@@ -224,8 +236,14 @@ class ThumbnailDao(
     /**
      * thumbnail task が現在不要になったことを記録する。
      */
-    fun markSkipped(photoId: String, variant: ThumbnailVariant, reason: String, now: Long) {
-        database.withConnection { connection ->
+    fun markSkipped(
+        photoId: String,
+        variant: ThumbnailVariant,
+        sourceFingerprint: String,
+        reason: String,
+        now: Long,
+    ): Boolean {
+        return database.withConnection { connection ->
             connection.prepareStatement(
                 """
                 UPDATE photo_thumbnails
@@ -235,13 +253,15 @@ class ThumbnailDao(
                     updated_at_epoch_ms = ?
                 WHERE photo_id = ?
                   AND variant = ?
+                  AND source_fingerprint = ?
                 """.trimIndent(),
             ).use { statement ->
                 statement.setString(1, reason.take(2000))
                 statement.setLong(2, now)
                 statement.setString(3, photoId)
                 statement.setString(4, variant.dbValue)
-                statement.executeUpdate()
+                statement.setString(5, sourceFingerprint)
+                statement.executeUpdate() > 0
             }
         }
     }

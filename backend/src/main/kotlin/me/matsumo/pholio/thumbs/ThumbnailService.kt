@@ -62,12 +62,20 @@ class ThumbnailService(
      * worker が 1 task を処理する。
      */
     fun processTask(task: ThumbnailTask) {
-        val photo = photoDao.findActiveById(task.photoId) ?: return thumbnailDao.markSkipped(
-            photoId = task.photoId,
-            variant = task.variant,
-            reason = "写真が active ではないため thumbnail 生成を skip しました",
-            now = System.currentTimeMillis(),
-        )
+        val photo = photoDao.findActiveById(task.photoId)
+
+        if (photo == null) {
+            thumbnailDao.markSkipped(
+                photoId = task.photoId,
+                variant = task.variant,
+                sourceFingerprint = task.sourceFingerprint,
+                reason = "写真が active ではないため thumbnail 生成を skip しました",
+                now = System.currentTimeMillis(),
+            )
+
+            return
+        }
+
         val sourcePath = pathResolver.resolve(photo)
         val relativeCachePath = relativeCachePath(photo.id, task.variant, task.sourceFingerprint)
         val outputPath = config.thumbDir.resolve(relativeCachePath)
@@ -88,6 +96,7 @@ class ThumbnailService(
             thumbnailDao.markReady(
                 photoId = photo.id,
                 variant = task.variant,
+                sourceFingerprint = task.sourceFingerprint,
                 relativeCachePath = relativeCachePath,
                 width = null,
                 height = null,
@@ -99,6 +108,7 @@ class ThumbnailService(
             thumbnailDao.markFailed(
                 photoId = task.photoId,
                 variant = task.variant,
+                sourceFingerprint = task.sourceFingerprint,
                 error = throwable.message ?: throwable::class.java.name,
                 now = System.currentTimeMillis(),
                 maxAttempts = 3,

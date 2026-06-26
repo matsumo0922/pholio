@@ -55,6 +55,44 @@ class ThumbnailServiceTest {
         }
     }
 
+    @Test
+    fun `old task result does not overwrite requeued fingerprint`() {
+        val photoRoot = Files.createTempDirectory("pholio-photos")
+        val dataDir = Files.createTempDirectory("pholio-data")
+        val config = testConfig(photoRoot, dataDir)
+        val database = Database(config)
+
+        try {
+            val photoDao = PhotoDao(database)
+            val thumbnailDao = ThumbnailDao(database)
+            val photo = samplePhoto()
+
+            photoDao.upsert(photo)
+            thumbnailDao.enqueue(photo.id, ThumbnailVariant.GridMd, "old-fingerprint", now = 1000L)
+            assertNotNull(thumbnailDao.lockNext(now = 1001L, lockedUntil = 2000L, maxAttempts = 3))
+            thumbnailDao.enqueue(photo.id, ThumbnailVariant.GridMd, "new-fingerprint", now = 1002L)
+
+            val applied = thumbnailDao.markReady(
+                photoId = photo.id,
+                variant = ThumbnailVariant.GridMd,
+                sourceFingerprint = "old-fingerprint",
+                relativeCachePath = "old/cache.webp",
+                width = 1,
+                height = 1,
+                sizeBytes = 1L,
+                now = 1003L,
+            )
+            val thumbnail = assertNotNull(thumbnailDao.find(photo.id, ThumbnailVariant.GridMd))
+
+            assertEquals(false, applied)
+            assertEquals("stale", thumbnail.status)
+            assertEquals("new-fingerprint", thumbnail.sourceFingerprint)
+            assertEquals(null, thumbnail.relativeCachePath)
+        } finally {
+            database.close()
+        }
+    }
+
     private fun testConfig(photoRoot: java.nio.file.Path, dataDir: java.nio.file.Path): AppConfig {
         return AppConfig.fromEnvironment(
             mapOf(
