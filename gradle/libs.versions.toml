@@ -2,6 +2,10 @@
 kotlin = "2.4.0"
 ktor = "3.5.1"
 logback = "1.5.21"
+hikari = "7.1.0"
+metadataExtractor = "2.20.0"
+sqliteJdbc = "3.53.2.0"
+ulidCreator = "5.2.4"
 
 [libraries]
 ktor-server-auto-head-response = { module = "io.ktor:ktor-server-auto-head-response-jvm", version.ref = "ktor" }
@@ -18,6 +22,10 @@ ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages-jvm", ve
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host-jvm", version.ref = "ktor" }
 ktor-serialization-json = { module = "io.ktor:ktor-serialization-kotlinx-json-jvm", version.ref = "ktor" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+hikari-cp = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
+metadata-extractor = { module = "com.drewnoakes:metadata-extractor", version.ref = "metadataExtractor" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
+ulid-creator = { module = "com.github.f4b6a3:ulid-creator", version.ref = "ulidCreator" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

@@ -42,6 +42,13 @@ data class ApiError(
 )
 
 /**
+ * API として conflict を返すための例外。
+ */
+class ApiConflictException(
+    override val message: String,
+) : RuntimeException(message)
+
+/**
  * 共通形式で API エラーを返す。
  */
 suspend fun ApplicationCall.respondApiError(

@@ -55,6 +55,8 @@
 26. OpenAPI は実装から生成する。現実的でない箇所が出た場合は、手書き spec + route test 照合へ fallback し、理由を本設計書に残す。
 27. Swagger UI を `/api/docs` で提供する。
 
+実装メモ: Ktor の route 定義から完全自動で OpenAPI schema を生成する構成は v1 の実装速度に対して重いため、現時点では `OpenApiDocumentFactory` による route mirror 方式を採用する。実装済み route の path / method / request body を手書きで同期し、`OpenApiDocumentFactoryTest` と Docker smoke で主要 path の存在を検証する。
+
 ---
 
 # 1. アーキテクチャ全体像（構成図・データフロー）
