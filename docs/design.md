@@ -56,6 +56,7 @@
 27. Swagger UI を `/api/docs` で提供する。
 
 実装メモ: Ktor の route 定義から完全自動で OpenAPI schema を生成する構成は v1 の実装速度に対して重いため、現時点では `OpenApiDocumentFactory` による route mirror 方式を採用する。実装済み route の path / method / request body を手書きで同期し、`OpenApiDocumentFactoryTest` と Docker smoke で主要 path の存在を検証する。
+実装メモ: UI e2e は `scripts/e2e_docker.sh` で Docker Compose 上の Pholio と Playwright Chromium container を同一 Docker network に置き、Home / Albums / Settings の主要導線を検証する。
 
 ---
 

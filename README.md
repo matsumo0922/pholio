@@ -79,6 +79,7 @@ PORT=8080
 ./gradlew :backend:test
 docker run --rm -v "$PWD/frontend:/work" -w /work oven/bun:1.3.14-slim bun run build
 ./scripts/smoke_docker.sh
+./scripts/e2e_docker.sh
 ```
 
 ## ドキュメント
@@ -87,7 +88,7 @@ docker run --rm -v "$PWD/frontend:/work" -w /work oven/bun:1.3.14-slim bun run b
 
 ## ステータス
 
-実装中。v1 の土台と backend media API、SQLite index、thumbnail queue、Docker smoke を構築済み。フロントエンド実 UI は後続実装対象。
+実装中。v1 の土台、backend media API、SQLite index、thumbnail queue、フロントエンド実 UI、Docker smoke / e2e を構築済み。
 
 ## ライセンス
 
