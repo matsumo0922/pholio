@@ -222,6 +222,31 @@ class ThumbnailDao(
     }
 
     /**
+     * thumbnail task が現在不要になったことを記録する。
+     */
+    fun markSkipped(photoId: String, variant: ThumbnailVariant, reason: String, now: Long) {
+        database.withConnection { connection ->
+            connection.prepareStatement(
+                """
+                UPDATE photo_thumbnails
+                SET status = 'skipped',
+                    locked_until_epoch_ms = NULL,
+                    last_error = ?,
+                    updated_at_epoch_ms = ?
+                WHERE photo_id = ?
+                  AND variant = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setString(1, reason.take(2000))
+                statement.setLong(2, now)
+                statement.setString(3, photoId)
+                statement.setString(4, variant.dbValue)
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    /**
      * thumbnail queue 件数を返す。
      */
     fun queueSummary(): ThumbnailQueueResponse = database.withConnection { connection ->

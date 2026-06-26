@@ -4,6 +4,7 @@ import java.security.SecureRandom
 import me.matsumo.pholio.api.CursorCodec
 import me.matsumo.pholio.api.PageCursor
 import me.matsumo.pholio.index.IndexDao
+import me.matsumo.pholio.thumbs.ThumbnailDao
 
 /**
  * 写真一覧・詳細 API の application service。
@@ -11,6 +12,7 @@ import me.matsumo.pholio.index.IndexDao
 class PhotoService(
     private val photoDao: PhotoDao,
     private val indexDao: IndexDao,
+    private val thumbnailDao: ThumbnailDao,
     private val cursorCodec: CursorCodec = CursorCodec(),
 ) {
     /**
@@ -218,6 +220,7 @@ class PhotoService(
 
         if (restored > 0) {
             indexDao.incrementLibraryRevision(now)
+            enqueueRestoredThumbnails(photoIds.distinct(), now)
         }
 
         return RestorePhotosResponse(
@@ -246,6 +249,13 @@ class PhotoService(
 
         require(isValidCursor) {
             "cursor がリクエスト条件と一致しません"
+        }
+    }
+
+    private fun enqueueRestoredThumbnails(photoIds: List<String>, now: Long) {
+        photoDao.findActiveByIds(photoIds).forEach { photo ->
+            thumbnailDao.enqueue(photo.id, ThumbnailVariant.GridSm, photo.sourceFingerprint, now)
+            thumbnailDao.enqueue(photo.id, ThumbnailVariant.GridMd, photo.sourceFingerprint, now)
         }
     }
 

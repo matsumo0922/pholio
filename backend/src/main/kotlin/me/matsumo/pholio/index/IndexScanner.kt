@@ -150,8 +150,12 @@ class IndexScanner(
 
         if (isUnchangedPhoto) {
             photoDao.markSeenUnchanged(existing.id, now)
+            val enqueuedCount = enqueueThumbnails(existing, now)
 
-            return currentProgress.copy(photosUnchanged = currentProgress.photosUnchanged + 1)
+            return currentProgress.copy(
+                photosUnchanged = currentProgress.photosUnchanged + 1,
+                thumbnailTasksEnqueued = currentProgress.thumbnailTasksEnqueued + enqueuedCount,
+            )
         }
 
         return runCatching {

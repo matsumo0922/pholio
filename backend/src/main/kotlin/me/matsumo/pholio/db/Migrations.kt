@@ -118,7 +118,7 @@ class Migrations(
             CREATE TABLE IF NOT EXISTS photo_thumbnails (
               photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE RESTRICT,
               variant TEXT NOT NULL CHECK (variant IN ('grid_sm', 'grid_md', 'preview_lg')),
-              status TEXT NOT NULL CHECK (status IN ('pending', 'ready', 'failed', 'stale')),
+              status TEXT NOT NULL CHECK (status IN ('pending', 'ready', 'failed', 'stale', 'skipped')),
               format TEXT NOT NULL DEFAULT 'webp',
               relative_cache_path TEXT,
               width INTEGER,

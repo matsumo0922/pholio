@@ -71,6 +71,7 @@ class AppServices(
             val photoService = PhotoService(
                 photoDao = photoDao,
                 indexDao = indexDao,
+                thumbnailDao = thumbnailDao,
                 cursorCodec = CursorCodec(),
             )
             val indexScanner = IndexScanner(

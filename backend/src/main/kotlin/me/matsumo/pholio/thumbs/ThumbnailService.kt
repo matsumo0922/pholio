@@ -62,7 +62,12 @@ class ThumbnailService(
      * worker が 1 task を処理する。
      */
     fun processTask(task: ThumbnailTask) {
-        val photo = photoDao.findActiveById(task.photoId) ?: return
+        val photo = photoDao.findActiveById(task.photoId) ?: return thumbnailDao.markSkipped(
+            photoId = task.photoId,
+            variant = task.variant,
+            reason = "写真が active ではないため thumbnail 生成を skip しました",
+            now = System.currentTimeMillis(),
+        )
         val sourcePath = pathResolver.resolve(photo)
         val relativeCachePath = relativeCachePath(photo.id, task.variant, task.sourceFingerprint)
         val outputPath = config.thumbDir.resolve(relativeCachePath)

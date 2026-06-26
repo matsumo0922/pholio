@@ -278,6 +278,35 @@ class PhotoDao(
     }
 
     /**
+     * active photo を id 群で取得する。
+     */
+    fun findActiveByIds(photoIds: List<String>): List<PhotoRecord> {
+        if (photoIds.isEmpty()) {
+            return emptyList()
+        }
+
+        return database.withConnection { connection ->
+            val placeholders = photoIds.joinToString(",") { "?" }
+            val sql = """
+                SELECT p.*
+                FROM photos p
+                WHERE p.id IN ($placeholders)
+                  AND ${activeWhere("p")}
+            """.trimIndent()
+
+            connection.prepareStatement(sql).use { statement ->
+                photoIds.forEachIndexed { index, photoId ->
+                    statement.setString(index + 1, photoId)
+                }
+
+                statement.executeQuery().use { resultSet ->
+                    resultSet.toPhotoRecords()
+                }
+            }
+        }
+    }
+
+    /**
      * path で photo を取得する。
      */
     fun findByRelativePath(relativePath: String): PhotoRecord? = database.withConnection { connection ->
