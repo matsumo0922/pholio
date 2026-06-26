@@ -23,6 +23,38 @@
 9. v1 のユーザーは 1 人とする。複数ユーザー、共有リンク、権限制御は v1 範囲外。ただし将来の Cloudflare Access 認証後にユーザー情報を `Principal` として扱える構造にする。
 10. 設定タブは v1 では空でもよいが、実装上は index 進捗やバージョン情報を置ける場所としてルートだけ確保する。
 
+## 実装前に確定した仕様
+
+2026-06-26 の実装開始前確認で以下を確定した。この節は本文中の古い例より優先する。
+
+1. アプリ名は **Pholio**、Kotlin package は `me.matsumo.pholio` とする。
+2. フロントエンド package manager は Bun とし、Docker build では `oven/bun:1.3.14-slim` を使う。
+3. Java baseline と Kotlin JVM target は Java 21 とする。
+4. Docker service / container 名は `pholio`、SQLite DB 名は `/data/pholio.sqlite3` とする。
+5. 写真ライブラリのホストパスは `.env` の `PHOTOS_PATH` を必須にする。
+6. 永続データのホストパスは `.env` の `DATA_PATH` を必須にし、Docker named volume は v1 既定にしない。
+7. Docker 実行ユーザーは `.env` の `PUID` / `PGID` を必須にする。
+8. DB が空の初回起動では full scan、既存 DB では `SCAN_ON_STARTUP=true` のとき diff scan を自動実行する。
+9. `APP_DEFAULT_TIMEZONE=Asia/Tokyo`、`THUMBNAIL_WORKERS=2`、`THUMBNAIL_PREVIEW_LAZY=true` を既定にする。
+10. `preview_lg` は lazy 生成のみとする。
+11. Settings には index status、diff / full scan 起動、scan cancel、除外済み写真一覧、復元 UI を置く。
+12. 論理削除の UI 文言は「ライブラリから除外」とする。
+13. 復元時は `excluded_at_epoch_ms` を消し、既存の `album_photos` により元のアルバム所属へ戻す。
+14. 除外済み一覧は除外日時の新しい順とし、missing photo は表示しない。
+15. アルバム cover は v1 では自動のみ。指定 UI / API は将来対応とする。
+16. Cloudflare Access は v1 では Noop 認証 hook のみ。本 JWT 検証は含めない。
+17. 写真詳細は `preview_lg` 表示後に原本画像へ自動差し替え、クリック / タップ拡大を含める。
+18. 複数選択は Shift+click 範囲選択を含める。ただし対象は読み込み済み item のみで、全件選択は含めない。
+19. 一括 API の上限は 1000 件とし、UI 側で batch 実行する。
+20. 隠しファイル / 隠しディレクトリは scan 対象外にする。
+21. ブラウザ非対応 MP4 は詳細画面でエラー表示し、v1 ではトランスコードしない。
+22. サムネイル生成失敗時は placeholder を表示する。
+23. ffmpeg / ffprobe / vipsthumbnail は PATH から探し、環境変数で上書き可能にする。見つからない場合は起動エラーにする。
+24. smoke test は Docker smoke とし、必要な写真データは `/tmp` に一時生成する。
+25. API error `message` は日本語とする。
+26. OpenAPI は実装から生成する。現実的でない箇所が出た場合は、手書き spec + route test 照合へ fallback し、理由を本設計書に残す。
+27. Swagger UI を `/api/docs` で提供する。
+
 ---
 
 # 1. アーキテクチャ全体像（構成図・データフロー）
@@ -81,7 +113,7 @@ flowchart LR
         MediaTools[libvips / ffmpeg / ffprobe]
     end
 
-    Ktor --> SQLite[(SQLite DB<br/>/data/photo-viewer.sqlite3)]
+    Ktor --> SQLite[(SQLite DB<br/>/data/pholio.sqlite3)]
     Ktor --> ThumbCache[(Thumbnail Cache<br/>/data/thumbs)]
     Ktor -->|read only| Photos[(Host ~/Photos<br/>mounted as /photos:ro)]
 
@@ -98,21 +130,20 @@ flowchart LR
 
 ```text
 Host NAS
-├── ~/Photos/                         # 既存写真ライブラリ。読み取り専用マウント
-└── docker volumes
-    └── photo_viewer_data/
-        ├── photo-viewer.sqlite3
-        ├── photo-viewer.sqlite3-wal
-        ├── photo-viewer.sqlite3-shm
-        ├── thumbs/
-        │   └── ab/cd/<photoId>/<variant>.<fingerprint>.webp
-        └── logs/                     # 任意。Docker logging driver だけでも可
+├── ${PHOTOS_PATH}/                    # 既存写真ライブラリ。読み取り専用マウント
+└── ${DATA_PATH}/                      # Pholio 永続データ。バックアップ対象
+    ├── pholio.sqlite3
+    ├── pholio.sqlite3-wal
+    ├── pholio.sqlite3-shm
+    ├── thumbs/
+    │   └── ab/cd/<photoId>/<variant>.<fingerprint>.webp
+    └── logs/                          # 任意。Docker logging driver だけでも可
 
 Container
-├── /app/app.jar
-├── /app/public/                      # React build output
+├── /app/bin/backend
+├── /app/lib/
 ├── /photos                           # :ro
-└── /data                             # 永続ボリューム
+└── /data                             # host bind 永続データ
 ```
 
 ## 1.4 起動時データフロー
@@ -2193,12 +2224,12 @@ multi-stage build にする。
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:22-bookworm-slim AS frontend-build
+FROM oven/bun:1.3.14-slim AS frontend-build
 WORKDIR /work/frontend
-COPY frontend/package*.json ./
-RUN npm ci
+COPY frontend/package.json frontend/bun.lock ./
+RUN bun install --frozen-lockfile
 COPY frontend/ ./
-RUN npm run build
+RUN bun run build
 
 FROM eclipse-temurin:21-jdk-jammy AS backend-build
 WORKDIR /work
@@ -2206,7 +2237,7 @@ COPY gradlew settings.gradle.kts build.gradle.kts ./
 COPY gradle ./gradle
 COPY backend ./backend
 COPY --from=frontend-build /work/frontend/dist ./backend/src/main/resources/public
-RUN ./gradlew :backend:shadowJar --no-daemon
+RUN ./gradlew :backend:installDist --no-daemon
 
 FROM eclipse-temurin:21-jre-jammy AS runtime
 
@@ -2218,12 +2249,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=backend-build /work/backend/build/libs/*-all.jar /app/app.jar
+COPY --from=backend-build /work/backend/build/install/backend /app
+RUN chmod -R a+rX /app
 
 ENV PORT=8080 \
     PHOTO_ROOT=/photos \
     DATA_DIR=/data \
-    DATABASE_URL=jdbc:sqlite:/data/photo-viewer.sqlite3 \
+    DATABASE_URL=jdbc:sqlite:/data/pholio.sqlite3 \
     THUMB_DIR=/data/thumbs \
     APP_DEFAULT_TIMEZONE=Asia/Tokyo \
     SCAN_ON_STARTUP=true \
@@ -2236,33 +2268,33 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/api/v1/health >/dev/null || exit 1
 
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["/app/bin/backend"]
 ```
 
 補足:
 
-- `node:22`、`eclipse-temurin:21` は実装時点で固定 version tag に pin して再現性を高める。
-- `shadowJar` ではなく Ktor Gradle plugin の distribution 形式でもよい。v1 は単一 fat jar が運用しやすい。
-- 非 root 実行にする場合、NAS の `~/Photos` 読み取り権限と `/data` 書き込み権限を合わせる必要がある。docker-compose 側で `user: "${PUID}:${PGID}"` を指定する方針にする。
+- `oven/bun:1.3.14-slim`、`eclipse-temurin:21` は実装時点で固定 version tag に pin して再現性を高める。
+- Gradle application plugin の `installDist` 形式を使い、runtime image では `/app/bin/backend` を起動する。
+- 非 root 実行にするため、distribution 内 jar は `chmod -R a+rX /app` で実行ユーザーから読めるようにする。
 
 ## 8.3 docker-compose.yml
 
 ```yaml
 services:
-  photo-viewer:
+  pholio:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: photo-viewer
+    container_name: pholio
     restart: unless-stopped
     ports:
       - "8080:8080"
-    user: "${PUID:-1000}:${PGID:-1000}"
+    user: "${PUID:?Set PUID}:${PGID:?Set PGID}"
     environment:
       PORT: "8080"
       PHOTO_ROOT: "/photos"
       DATA_DIR: "/data"
-      DATABASE_URL: "jdbc:sqlite:/data/photo-viewer.sqlite3"
+      DATABASE_URL: "jdbc:sqlite:/data/pholio.sqlite3"
       THUMB_DIR: "/data/thumbs"
       APP_DEFAULT_TIMEZONE: "Asia/Tokyo"
       SCAN_ON_STARTUP: "true"
@@ -2271,17 +2303,14 @@ services:
       TRUST_PROXY_HEADERS: "false"
       CLOUDFLARE_ACCESS_ENABLED: "false"
     volumes:
-      - ${HOME}/Photos:/photos:ro
-      - photo_viewer_data:/data
+      - ${PHOTOS_PATH:?Set PHOTOS_PATH}:/photos:ro
+      - ${DATA_PATH:?Set DATA_PATH}:/data
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/v1/health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
-
-volumes:
-  photo_viewer_data:
 ```
 
 `.env` 例:
@@ -2289,7 +2318,8 @@ volumes:
 ```env
 PUID=1000
 PGID=1000
-HOME=/home/your-user
+PHOTOS_PATH=/absolute/path/to/Photos
+DATA_PATH=/absolute/path/to/pholio-data
 ```
 
 NAS の実際のパスが `/volume1/Photos` などの場合は compose の volume を以下に変える。
@@ -2353,7 +2383,7 @@ routing {
 開発時は 2 プロセス構成にする。
 
 - Backend: `./gradlew :backend:run`
-- Frontend: `npm run dev`
+- Frontend: `bun run dev`
 
 Vite proxy:
 
@@ -2373,16 +2403,16 @@ export default defineConfig({
 
 バックアップ対象:
 
-- `/data/photo-viewer.sqlite3`
-- `/data/photo-viewer.sqlite3-wal`
-- `/data/photo-viewer.sqlite3-shm`
+- `/data/pholio.sqlite3`
+- `/data/pholio.sqlite3-wal`
+- `/data/pholio.sqlite3-shm`
 - `/data/thumbs` は再生成可能なので任意
 
 ただし、アルバム・論理削除状態は SQLite にしかないため DB backup は必須。
 
 推奨:
 
-- NAS の定期バックアップで `photo_viewer_data` volume を対象にする。
+- NAS の定期バックアップで `DATA_PATH` を対象にする。
 - 月 1 回、アプリ停止状態の cold backup を取る。
 - 将来、管理 API で SQLite online backup を提供する。
 
@@ -2884,7 +2914,7 @@ v1 に含めない。
 # 付録 A. 推奨ディレクトリ構成
 
 ```text
-photo-viewer/
+pholio/
 ├── backend/
 │   ├── build.gradle.kts
 │   └── src/main/kotlin/app/photoviewer/
@@ -2922,7 +2952,7 @@ photo-viewer/
 | `PORT` | `8080` | Ktor listen port |
 | `PHOTO_ROOT` | `/photos` | 読み取り専用写真 root |
 | `DATA_DIR` | `/data` | 永続データ root |
-| `DATABASE_URL` | `jdbc:sqlite:/data/photo-viewer.sqlite3` | SQLite JDBC URL |
+| `DATABASE_URL` | `jdbc:sqlite:/data/pholio.sqlite3` | SQLite JDBC URL |
 | `THUMB_DIR` | `/data/thumbs` | thumbnail cache root |
 | `APP_DEFAULT_TIMEZONE` | `Asia/Tokyo` | timezone なし EXIF の解釈 |
 | `SCAN_ON_STARTUP` | `true` | 起動時 diff/full scan |
