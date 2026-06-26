@@ -31,7 +31,9 @@ data class AppConfig(
         /**
          * 環境変数から起動設定を作成する。
          */
-        fun fromEnvironment(environment: Map<String, String> = System.getenv()): AppConfig {
+        fun fromEnvironment(
+            environment: Map<String, String> = System.getenv(),
+        ): AppConfig {
             val photoRoot = requiredPath(environment, "PHOTO_ROOT")
             val dataDir = requiredPath(environment, "DATA_DIR")
 

@@ -3,6 +3,7 @@ package me.matsumo.pholio.health
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import java.nio.file.Files
 import kotlinx.serialization.json.Json
@@ -36,5 +37,29 @@ class HealthRoutesTest {
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("ok", Json.decodeFromString<HealthResponse>(response.bodyAsText()).status)
+    }
+
+    @Test
+    fun `public asset is served before spa fallback`() = testApplication {
+        val photoRoot = Files.createTempDirectory("pholio-photos")
+        val dataDir = Files.createTempDirectory("pholio-data")
+
+        application {
+            module(
+                AppConfig.fromEnvironment(
+                    mapOf(
+                        "PHOTO_ROOT" to photoRoot.toString(),
+                        "DATA_DIR" to dataDir.toString(),
+                        "MEDIA_TOOL_CHECK_ENABLED" to "false",
+                    ),
+                ),
+            )
+        }
+
+        val response = client.get("/assets/test.js")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("javascript", response.contentType()?.contentSubtype)
+        assertEquals("window.__PHOLIO_TEST_ASSET__ = true;\n", response.bodyAsText())
     }
 }

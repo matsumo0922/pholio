@@ -52,7 +52,9 @@ fun main() {
 /**
  * Pholio の Ktor application module。
  */
-fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
+fun Application.module(
+    config: AppConfig = AppConfig.fromEnvironment(),
+) {
     val applicationLog = environment.log
 
     install(ContentNegotiation) {
@@ -132,5 +134,27 @@ private suspend fun ApplicationCall.respondSpaFallback() {
         return
     }
 
+    val resourcePath = path.toPublicResourcePath()
+
+    if (resourcePath != null && publicResourceExists(resourcePath)) {
+        respondResource(resourcePath)
+
+        return
+    }
+
     respondResource("public/index.html")
+}
+
+private fun List<String>.toPublicResourcePath(): String? {
+    if (isEmpty() || any { it.isBlank() || it == "." || it == ".." }) {
+        return null
+    }
+
+    return "public/${joinToString("/")}"
+}
+
+private fun publicResourceExists(resourcePath: String): Boolean {
+    val classLoader = Thread.currentThread().contextClassLoader
+
+    return classLoader.getResource(resourcePath) != null
 }

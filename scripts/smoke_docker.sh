@@ -35,6 +35,22 @@ for _ in $(seq 1 60); do
   if curl -fsS http://127.0.0.1:18080/api/v1/health >/dev/null; then
     curl -fsS http://127.0.0.1:18080/api/v1/openapi.json >/dev/null
     curl -fsS http://127.0.0.1:18080/api/docs >/dev/null
+    INDEX_HTML="$(curl -fsS http://127.0.0.1:18080/)"
+    ASSET_PATH="$(printf '%s' "$INDEX_HTML" | grep -Eo '/assets/[^"]+\.js' | head -n 1)"
+
+    if [ -z "$ASSET_PATH" ]; then
+      echo "Failed to find frontend asset in index.html" >&2
+      exit 1
+    fi
+
+    ASSET_HEADERS="$(curl -fsSI "http://127.0.0.1:18080$ASSET_PATH")"
+
+    if ! printf '%s' "$ASSET_HEADERS" | grep -qi 'content-type: .*javascript'; then
+      echo "Frontend asset was not served as JavaScript: $ASSET_PATH" >&2
+      printf '%s\n' "$ASSET_HEADERS" >&2
+      exit 1
+    fi
+
     exit 0
   fi
 
