@@ -30,6 +30,10 @@ dependencies {
     implementation(libs.ktor.server.status.pages)
     implementation(libs.ktor.serialization.json)
     implementation(libs.logback.classic)
+    implementation(libs.hikari.cp)
+    implementation(libs.metadata.extractor)
+    implementation(libs.sqlite.jdbc)
+    implementation(libs.ulid.creator)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.test.host)

@@ -15,18 +15,23 @@ class StartupChecks(
      * 起動に必要な前提を検証する。
      */
     fun verify() {
-        require(config.photoRoot.isDirectory() && config.photoRoot.isReadable()) {
+        val canReadPhotoRoot = config.photoRoot.isDirectory() && config.photoRoot.isReadable()
+
+        require(canReadPhotoRoot) {
             "PHOTO_ROOT は読み取り可能なディレクトリである必要があります: ${config.photoRoot}"
         }
 
         config.dataDir.createDirectories()
         config.thumbDir.createDirectories()
 
-        require(config.dataDir.isDirectory() && config.dataDir.isWritable()) {
+        val canWriteDataDir = config.dataDir.isDirectory() && config.dataDir.isWritable()
+        val canWriteThumbDir = config.thumbDir.isDirectory() && config.thumbDir.isWritable()
+
+        require(canWriteDataDir) {
             "DATA_DIR は書き込み可能なディレクトリである必要があります: ${config.dataDir}"
         }
 
-        require(config.thumbDir.isDirectory() && config.thumbDir.isWritable()) {
+        require(canWriteThumbDir) {
             "THUMB_DIR は書き込み可能なディレクトリである必要があります: ${config.thumbDir}"
         }
 

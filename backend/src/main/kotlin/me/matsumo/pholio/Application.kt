@@ -3,6 +3,8 @@ package me.matsumo.pholio
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationStarted
+import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.application.install
@@ -25,14 +27,18 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
+import me.matsumo.pholio.api.ApiConflictException
 import me.matsumo.pholio.api.ApiErrorResponse
 import me.matsumo.pholio.api.OpenApiDocumentFactory
 import me.matsumo.pholio.api.respondApiError
+import me.matsumo.pholio.albums.albumRoutes
 import me.matsumo.pholio.auth.NoopAuthenticator
 import me.matsumo.pholio.config.AppConfig
 import me.matsumo.pholio.config.StartupChecks
 import me.matsumo.pholio.health.healthRoutes
+import me.matsumo.pholio.index.indexRoutes
 import me.matsumo.pholio.openapi.swaggerHtml
+import me.matsumo.pholio.photos.photoRoutes
 
 /**
  * Pholio の Ktor サーバーを起動するエントリーポイント。
@@ -85,6 +91,22 @@ fun Application.module(
             )
         }
 
+        exception<NoSuchElementException> { call, cause ->
+            call.respondApiError(
+                status = HttpStatusCode.NotFound,
+                code = "NOT_FOUND",
+                message = cause.message ?: "対象が見つかりません",
+            )
+        }
+
+        exception<ApiConflictException> { call, cause ->
+            call.respondApiError(
+                status = HttpStatusCode.Conflict,
+                code = "CONFLICT",
+                message = cause.message,
+            )
+        }
+
         exception<Throwable> { call, cause ->
             applicationLog.error("Unhandled application error", cause)
 
@@ -100,11 +122,35 @@ fun Application.module(
     }
 
     val authenticator = NoopAuthenticator()
+    val services = AppServices.create(config)
     val openApiDocumentFactory = OpenApiDocumentFactory(config)
+
+    monitor.subscribe(ApplicationStarted) {
+        services.startBackgroundJobs()
+    }
+
+    monitor.subscribe(ApplicationStopped) {
+        services.close()
+    }
 
     routing {
         route("/api/v1") {
             healthRoutes(config, authenticator)
+            photoRoutes(
+                photoService = services.photoService,
+                thumbnailService = services.thumbnailService,
+                pathResolver = services.pathResolver,
+            )
+            albumRoutes(
+                albumDao = services.albumDao,
+                photoService = services.photoService,
+            )
+            indexRoutes(
+                indexDao = services.indexDao,
+                thumbnailDao = services.thumbnailDao,
+                indexScanner = services.indexScanner,
+                scope = services.scope,
+            )
 
             get("/openapi.json") {
                 call.respond(openApiDocumentFactory.create())
@@ -136,7 +182,9 @@ private suspend fun ApplicationCall.respondSpaFallback() {
 
     val resourcePath = path.toPublicResourcePath()
 
-    if (resourcePath != null && publicResourceExists(resourcePath)) {
+    val hasResource = resourcePath != null && publicResourceExists(resourcePath)
+
+    if (hasResource) {
         respondResource(resourcePath)
 
         return
@@ -146,7 +194,10 @@ private suspend fun ApplicationCall.respondSpaFallback() {
 }
 
 private fun List<String>.toPublicResourcePath(): String? {
-    if (isEmpty() || any { it.isBlank() || it == "." || it == ".." }) {
+    val hasInvalidSegment = any { it.isBlank() || it == "." || it == ".." }
+    val cannotResolvePath = isEmpty() || hasInvalidSegment
+
+    if (cannotResolvePath) {
         return null
     }
 

@@ -54,6 +54,14 @@ PORT=8080
 - `preview_lg` サムネイルは lazy 生成する。
 - 物理写真は削除・移動・リネームしない。アプリ内の除外は論理削除として扱う。
 
+## 実装済み Backend API
+
+- 写真一覧 / 詳細 / 前後写真 / 原本配信 / サムネイル配信
+- 写真のライブラリ除外 / 復元 / 除外済み一覧
+- アルバム一覧 / 作成 / 詳細 / 名称変更 / 削除
+- アルバムへの写真追加 / 除去 / アルバム内写真一覧
+- index status / full・diff scan 開始 / scan cancel
+
 ## バックアップ
 
 必須バックアップ対象は `DATA_PATH` 配下。
@@ -79,7 +87,7 @@ docker run --rm -v "$PWD/frontend:/work" -w /work oven/bun:1.3.14-slim bun run b
 
 ## ステータス
 
-実装中。v1 の土台として Ktor / React / Docker / OpenAPI / Swagger UI を構築済み。
+実装中。v1 の土台と backend media API、SQLite index、thumbnail queue、Docker smoke を構築済み。フロントエンド実 UI は後続実装対象。
 
 ## ライセンス
 
