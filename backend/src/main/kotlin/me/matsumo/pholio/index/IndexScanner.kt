@@ -217,6 +217,10 @@ class IndexScanner(
         }.getOrElse { throwable ->
             indexDao.addError(jobId, relativePath, "metadata", throwable, now)
 
+            if (existing != null) {
+                photoDao.markSeenUnchanged(existing.id, now)
+            }
+
             currentProgress.copy(errorsCount = currentProgress.errorsCount + 1)
         }.also { updatedProgress ->
             indexDao.updateProgress(jobId, updatedProgress, now)

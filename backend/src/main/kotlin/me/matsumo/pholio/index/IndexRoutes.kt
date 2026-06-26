@@ -23,11 +23,12 @@ fun Route.indexRoutes(
     get("/index/status") {
         val latestJob = indexDao.latestJob()
         val runningJob = indexDao.runningJob()
+        val displayJob = runningJob ?: latestJob
 
         call.respond(
             IndexStatusResponse(
-                status = runningJob?.status ?: "idle",
-                currentJob = runningJob?.toResponse() ?: latestJob?.takeIf { it.status == "running" }?.toResponse(),
+                status = displayJob?.status ?: "idle",
+                currentJob = displayJob?.toResponse(),
                 thumbnailQueue = thumbnailDao.queueSummary(),
                 libraryRevision = indexDao.libraryRevision(),
             ),
@@ -58,6 +59,7 @@ fun Route.indexRoutes(
 private fun ScanJobRecord.toResponse(): ScanJobResponse = ScanJobResponse(
     id = id,
     mode = mode,
+    status = status,
     filesSeen = filesSeen,
     mediaFilesSeen = mediaFilesSeen,
     sidecarJsonSeen = sidecarJsonSeen,

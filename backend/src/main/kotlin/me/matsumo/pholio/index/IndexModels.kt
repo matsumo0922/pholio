@@ -98,6 +98,7 @@ data class IndexStatusResponse(
 data class ScanJobResponse(
     val id: String,
     val mode: String,
+    val status: String,
     val filesSeen: Long,
     val mediaFilesSeen: Long,
     val sidecarJsonSeen: Long,
