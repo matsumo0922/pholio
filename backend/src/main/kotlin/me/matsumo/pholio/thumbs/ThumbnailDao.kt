@@ -254,6 +254,13 @@ class ThumbnailDao(
                 WHERE photo_id = ?
                   AND variant = ?
                   AND source_fingerprint = ?
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM photos p
+                    WHERE p.id = ?
+                      AND p.excluded_at_epoch_ms IS NULL
+                      AND p.missing_since_epoch_ms IS NULL
+                  )
                 """.trimIndent(),
             ).use { statement ->
                 statement.setString(1, reason.take(2000))
@@ -261,6 +268,7 @@ class ThumbnailDao(
                 statement.setString(3, photoId)
                 statement.setString(4, variant.dbValue)
                 statement.setString(5, sourceFingerprint)
+                statement.setString(6, photoId)
                 statement.executeUpdate() > 0
             }
         }

@@ -93,6 +93,43 @@ class ThumbnailServiceTest {
         }
     }
 
+    @Test
+    fun `old inactive task does not skip restored photo task`() {
+        val photoRoot = Files.createTempDirectory("pholio-photos")
+        val dataDir = Files.createTempDirectory("pholio-data")
+        val config = testConfig(photoRoot, dataDir)
+        val database = Database(config)
+
+        try {
+            val photoDao = PhotoDao(database)
+            val thumbnailDao = ThumbnailDao(database)
+            val photo = samplePhoto()
+
+            photoDao.upsert(photo)
+            thumbnailDao.enqueue(photo.id, ThumbnailVariant.GridMd, photo.sourceFingerprint, now = 1000L)
+            assertNotNull(thumbnailDao.lockNext(now = 1001L, lockedUntil = 2000L, maxAttempts = 3))
+            photoDao.exclude(listOf(photo.id), now = 1002L)
+            photoDao.restore(listOf(photo.id), now = 1003L)
+            thumbnailDao.enqueue(photo.id, ThumbnailVariant.GridMd, photo.sourceFingerprint, now = 1004L)
+
+            val applied = thumbnailDao.markSkipped(
+                photoId = photo.id,
+                variant = ThumbnailVariant.GridMd,
+                sourceFingerprint = photo.sourceFingerprint,
+                reason = "inactive",
+                now = 1005L,
+            )
+            val thumbnail = assertNotNull(thumbnailDao.find(photo.id, ThumbnailVariant.GridMd))
+            val queue = thumbnailDao.queueSummary()
+
+            assertEquals(false, applied)
+            assertEquals("pending", thumbnail.status)
+            assertEquals(1L, queue.pending)
+        } finally {
+            database.close()
+        }
+    }
+
     private fun testConfig(photoRoot: java.nio.file.Path, dataDir: java.nio.file.Path): AppConfig {
         return AppConfig.fromEnvironment(
             mapOf(
