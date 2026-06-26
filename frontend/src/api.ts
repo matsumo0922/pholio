@@ -2,6 +2,7 @@ import type {
   AddAlbumPhotosResponse,
   AlbumDetail,
   AlbumListResponse,
+  AlbumSummary,
   IndexStatus,
   MutationCountResponse,
   PhotoDetail,
@@ -102,8 +103,8 @@ export function getAlbum(albumId: string): Promise<AlbumDetail> {
   return requestJson<AlbumDetail>(`/api/v1/albums/${albumId}`);
 }
 
-export function createAlbum(name: string): Promise<AlbumDetail> {
-  return requestJson<AlbumDetail>('/api/v1/albums', {
+export function createAlbum(name: string): Promise<AlbumSummary> {
+  return requestJson<AlbumSummary>('/api/v1/albums', {
     method: 'POST',
     body: { name },
   });

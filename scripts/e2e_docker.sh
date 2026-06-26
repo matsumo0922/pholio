@@ -35,6 +35,8 @@ ENV
 
 cd "$ROOT_DIR"
 
+rm -rf "$ROOT_DIR/frontend/test-results" "$ROOT_DIR/frontend/playwright-report"
+
 docker compose --env-file "$TMP_DIR/.env" up --build -d
 
 for _ in $(seq 1 60); do
@@ -60,3 +62,5 @@ docker run --rm \
   -w /work \
   "$PLAYWRIGHT_IMAGE" \
   npx playwright test
+
+rm -rf "$ROOT_DIR/frontend/test-results" "$ROOT_DIR/frontend/playwright-report"
