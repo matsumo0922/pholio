@@ -227,7 +227,7 @@ function GalleryView({ albumId, title, compactHeader = false }: GalleryViewProps
   const hasSelection = selectedIds.size > 0;
 
   const excludeMutation = useMutation({
-    mutationFn: () => excludePhotos([...selectedIds]),
+    mutationFn: () => excludePhotosInBatches([...selectedIds]),
     onSuccess: async () => {
       setSelectedIds(new Set());
       await queryClient.invalidateQueries({ queryKey: ['photos'] });
@@ -498,6 +498,7 @@ type PhotoDetailDialogProps = {
 function PhotoDetailDialog({ photos, index, onIndexChanged, onClosed }: PhotoDetailDialogProps) {
   const photo = index === null ? undefined : photos[index];
   const [zoomed, setZoomed] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   const detailQuery = useQuery({
     queryKey: ['photo', photo?.id],
     queryFn: () => getPhoto(photo?.id ?? ''),
@@ -511,6 +512,7 @@ function PhotoDetailDialog({ photos, index, onIndexChanged, onClosed }: PhotoDet
 
   useEffect(() => {
     setZoomed(false);
+    setVideoError(false);
   }, [photo?.id]);
 
   return (
@@ -539,13 +541,31 @@ function PhotoDetailDialog({ photos, index, onIndexChanged, onClosed }: PhotoDet
           {detailQuery.isLoading && <LoadingState dark />}
           {detailQuery.isError && <Alert severity="error">{detailQuery.error.message}</Alert>}
           {media?.mediaType === 'video' ? (
-            <Box
-              component="video"
-              src={(detail as PhotoDetail | undefined)?.originalUrl}
-              poster={media.thumbnail.previewLg}
-              controls
-              sx={{ width: '100%', height: 'calc(100vh - 64px)', objectFit: 'contain' }}
-            />
+            <>
+              <Box
+                component="video"
+                src={(detail as PhotoDetail | undefined)?.originalUrl}
+                poster={media.thumbnail.previewLg}
+                controls
+                onError={() => setVideoError(true)}
+                sx={{ width: '100%', height: 'calc(100vh - 64px)', objectFit: 'contain' }}
+              />
+              {videoError && (
+                <Alert
+                  severity="error"
+                  sx={{
+                    position: 'absolute',
+                    right: 16,
+                    bottom: 16,
+                    left: 16,
+                    maxWidth: 720,
+                    mx: 'auto',
+                  }}
+                >
+                  この動画はブラウザで再生できません。別の codec で保存された MP4 の可能性があります。
+                </Alert>
+              )}
+            </>
           ) : (
             <Box
               component="img"
@@ -719,7 +739,7 @@ function AlbumPickerDialog({ open, photoIds, onClosed, onCompleted }: AlbumPicke
     enabled: open,
   });
   const addMutation = useMutation({
-    mutationFn: (albumId: string) => addAlbumPhotos(albumId, photoIds),
+    mutationFn: (albumId: string) => addAlbumPhotosInBatches(albumId, photoIds),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['albums'] });
       onCompleted();
@@ -994,3 +1014,31 @@ function createSeed(): string {
 
   return Array.from(values).map((value) => value.toString(16).padStart(8, '0')).join('');
 }
+
+async function excludePhotosInBatches(photoIds: string[]): Promise<void> {
+  const chunks = chunkPhotoIds(photoIds);
+
+  for (const photoIdChunk of chunks) {
+    await excludePhotos(photoIdChunk);
+  }
+}
+
+async function addAlbumPhotosInBatches(albumId: string, photoIds: string[]): Promise<void> {
+  const chunks = chunkPhotoIds(photoIds);
+
+  for (const photoIdChunk of chunks) {
+    await addAlbumPhotos(albumId, photoIdChunk);
+  }
+}
+
+function chunkPhotoIds(photoIds: string[]): string[][] {
+  const chunks: string[][] = [];
+
+  for (let startIndex = 0; startIndex < photoIds.length; startIndex += batchSize) {
+    chunks.push(photoIds.slice(startIndex, startIndex + batchSize));
+  }
+
+  return chunks;
+}
+
+const batchSize = 1000;
